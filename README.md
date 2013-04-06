@@ -27,6 +27,6 @@ Library is still under development
 
 ## Author ##
 Saad Talaat
-[Mail]:mailto://saadtalaat@gmail.com
-[Twitter]:http://twitter.com
-[Linkedin]:http://www.linkedin.com/in/saadtalaat
+[Mail]: mailto://saadtalaat@gmail.com
+[Twitter]: http://twitter.com
+[Linkedin]: http://www.linkedin.com/in/saadtalaat
