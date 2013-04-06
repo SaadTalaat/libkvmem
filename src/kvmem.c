@@ -11,8 +11,11 @@
 #include <linux/limits.h>
 #include <unistd.h>
 #include <string.h>
+#include <a.out.h>
 
 #include "kvmem_private.h"
+
+
 
 /**
  * description: a kvmem_openfiles helper
@@ -96,4 +99,88 @@ kvmem_close(kvmem_t *kd)
 	if( kd->nlfd)
 		error |= close(kd->nlfd);
 	return error;
+}
+
+static int
+kvmem_fndlist_prefix(kvmem_t *kd, struct nlist *nl, int missing, const char *prefix)
+{
+	struct nlist *n,*np,*p;
+	char *cp,*ce;
+	const char *ccp;
+	size_t len;
+	int slen, unresolved;
+
+
+
+	len = 0;
+	unresolved = 0;
+
+	for(p = nl; p->n_un.n_name && p->n_un.n_name[0]; ++p)
+	{
+		if(p->n_type != N_UNDF)
+			continue;
+		len += sizeof(struct nlist) + strlen(prefix) + 2*(strlen(p->n_un.n_name +1));
+		unresolved ++;
+	}
+	if(unresolved == 0)
+		return 0;
+	len += sizeof(struct nlist);
+	unresolved++;
+
+	n = np = malloc(len);
+	memset(n,0,len);
+	if(n == NULL)
+		return 0;
+	cp = ce = (char *) np;
+	cp += unresolved * sizeof(struct nlist);
+	ce += len;
+
+	unresolved = 0;
+	for(p = nl;p->n_un.n_name && p->n_un.n_name[0]; ++p)
+	{
+		if(p->n_type != N_UNDF)
+			continue;
+		memcpy(np,p,sizeof(struct nlist));
+		slen = snprintf(cp, ce-cp, "%s%s%c%s",prefix,(prefix[0] != '\0' && p->n_un.n_name[0] == '_'? (p->n_un.n_name+1):p->n_un.n_name),'\0',p->n_un.n_name);
+		if( slen < 0 || slen >= ce-cp)
+			continue;
+		np->n_un.n_name = cp;
+		cp += slen +1;
+		np++;
+		unresolved ++;
+	}
+	np = n;
+	// TODO: Implement missing symbols additions and elf symbols enumration.
+	unresolved = __fdnlist(kd->nlfd, np);
+	return unresolved;
+}
+
+int
+_kvmem_nllist(kvmem_t *kd, struct nlist *nl, int init)
+{
+	struct nlist *p;
+	int invalid, error;
+	char symname[1024];
+	const char *prefix = "";
+	if(!(kd->pmfd >= 0) )
+	{
+		// to be implemented
+		error = __fdnlist(kd->nlfd, nl);
+		if(error <= 0)
+			return error;
+		
+	}
+	for(p= nl; p->n_un.n_name && p->n_un.n_name[0]; ++p)
+	{
+		if(p->n_type != N_UNDF)
+			continue;
+		error = snprintf(symname, sizeof(symname), "%s%s", prefix, (prefix[0] != '\0' && p->n_un.n_name[0] == '_')? (p->n_un.n_name +1 ): p->n_un.n_name);
+		if(error < 0 || error >= (int) sizeof(symname))
+			continue;
+		// Meh, probably will right elf parser first..
+		p->n_un.n_name = symname;
+	}
+
+
+
 }

@@ -8,4 +8,5 @@
 #include <kvmem.h>
 
 kvmem_t* _kvmem_open(kvmem_t* kd, const char* kern_binary, const char* mem_dev, unsigned int access, unsigned int verbose);
+int __fdnlist(int fd, struct nlist *np);
 #endif /* _KVMEM_PRIVATE_H_ */
