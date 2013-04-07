@@ -15,9 +15,13 @@ Providing access to kernel memory from kernel /dev/mem port and providing a meth
 ### Installation ###
 * Building
     - `$ git clone https://github.com/SaadTalaat/Libkvmem.git`
-    download source package
+    Download source package
     - `$ make`
-    build library
+    Build library in directory bin under libkvmem.so.1
+    - `# make install`
+    Moves library into system default library path for execution
+    - `$ make tests`
+    Compiles and runs tests.
 
 ---
 
