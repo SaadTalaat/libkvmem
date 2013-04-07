@@ -30,12 +30,13 @@ Library is still under development
 
 ## Author ##
 Saad Talaat
+
 [Mail][]
 
 [Twitter][]
 
 [Linkedin][]
 
-[Mail]: mailto://saadtalaat@gmail.com
-[Twitter]: http://twitter.com
+[Mail]: mailto:saadtalaat@gmail.com
+[Twitter]: http://twitter.com/sa3dtalaat
 [Linkedin]: http://www.linkedin.com/in/saadtalaat
