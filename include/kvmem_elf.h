@@ -26,4 +26,10 @@
 
 #define ELF_TARGET_DATA ELFDATA2LSB
 
+#define ROUND_DOWN(x,y)\
+({\
+uint32_t z = (uint32_t)(x); \
+(typeof(x)) (z - z % (y)); \
+})
+
 #endif

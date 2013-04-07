@@ -11,6 +11,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#define __USE_LARGEFILE64
 #include <sys/mman.h>
 #include <kvmem_elf.h>
 
@@ -115,19 +116,23 @@ _elf_fdnlist(int fd, struct nlist* list)
 	void *base;
 	char *strtab = NULL;
 	struct stat st;
-
-
+	off_t page_size;
+	page_size = sysconf(_SC_PAGE_SIZE);
+	printf("PAGE SIZE %lx\n",page_size);
+	printf("Starting.. %s\n",list[1].n_un.n_name);
 	if(fd <= 0 )
 		return -1;
-	if(lseek(fd, (off_t) 0, SEEK_SET) == -1 || read(fd, &ehdr, sizeof(ehdr)) != sizeof(ehdr) || !_check_elf(&ehdr) || fstat(fd, &st) < 0)
+	if(lseek(fd, (off_t) 0, SEEK_SET) == -1 || read(fd, &ehdr, sizeof(ehdr)) != sizeof(ehdr) || !_check_elf(&ehdr) )//|| fstat(fd, &st) < 0)
 		return -1;
 
 	shdr_size = ehdr.e_shentsize * ehdr.e_shnum;
-	base = mmap(NULL, (size_t) shdr_size, PROT_READ, 0, fd, (off_t) ehdr.e_shoff);
+	lseek(fd,(off_t)0, SEEK_SET);
+	base = mmap(NULL, shdr_size*2, PROT_READ, MAP_PRIVATE, fd, (ehdr.e_shoff  & ~(page_size -1)));
+	base += ehdr.e_shoff - (ehdr.e_shoff  & ~(page_size -1));
 	if(base == MAP_FAILED)
 	{
-		munmap(base, (size_t) shdr_size);
-		return -1;
+		printf("[Error]: Could not map file.\n");
+		goto end;
 	}
 	
 #ifdef KVMEM_32
@@ -135,10 +140,9 @@ _elf_fdnlist(int fd, struct nlist* list)
 #else
 	shdr = (Elf64_Shdr *) base;
 #endif
-
 	for(i = 0; i < ehdr.e_shnum; i++)
 	{
-		if( shdr[i].sh_type = SHT_SYMTAB)
+		if( shdr[i].sh_type == SHT_SYMTAB)
 		{
 			symoff = shdr[i].sh_offset;
 			symsize = shdr[i].sh_size;
@@ -150,17 +154,18 @@ _elf_fdnlist(int fd, struct nlist* list)
 	}
 
 	if(symoff == 0)
-		return -1;
-
-	base = mmap(NULL, (size_t) symstrsize, PROT_READ, 0, fd,(off_t) symstroff);
+		goto end;
+	int diff =symstroff - (symstroff & ~(page_size -1));
+	base = mmap(NULL, (size_t) symstrsize+diff, PROT_READ, MAP_PRIVATE, fd,(off_t) (symstroff & ~(page_size -1)));
 	if(base == MAP_FAILED)
 	{
+		printf("Could not map Size: %x, Offset %lx\n", symstrsize, (symstroff & ~(page_size -1)));
 		if(shdr != NULL)
 			munmap(shdr, shdr_size);
-		munmap(base, (size_t) symstrsize);
-		return -1;
+		goto end;
 	}
-
+	base+=diff;
+	printf("%p====\n",base);
 	strtab = (char*) base;
 
 	for(p = list; (p->n_un.n_name == NULL || p->n_un.n_name[0] == '\0'); ++p)
@@ -170,37 +175,60 @@ _elf_fdnlist(int fd, struct nlist* list)
 		p->n_desc = 0;
 		p->n_value = 0;
 		entrynum++;
+		printf("Entry %d\n",entrynum);
 	}
-
+	printf("Seeking size %lx\n",symstroff);
 	if(lseek(fd, (off_t) symoff, SEEK_SET) == -1)
 	{
+		printf("Fail\n");
 		entrynum = -1;
-		return -1;
+		goto end;
 	}
 
 	while (symsize > 0 && entrynum > 0)
 	{
 		j = sizeof(syms) >= symsize? symsize : sizeof(syms);
+
 		if(read(fd,syms,j) != j)
+		{
+			printf("Didn't read\n");
 			break;
+		}
+
 		symsize -= j;
 		for(syms_2 = syms; j > 0 && entrynum > 0; ++syms_2, j -= sizeof(*syms_2))
 		{
-			char *name;
+			char *name,c;
 			struct nlist *p;
 			name = strtab + syms_2->st_name;
 			if(name[0] == '\0')
-				continue;
-			for( p = list; (p->n_un.n_name == NULL || p->n_un.n_name[0] == '\0'); p++)
 			{
-				if( (p->n_un.n_name[0] == '_' && strcmp(name,p->n_un.n_name+1) == 0) || strcmp(p->n_un.n_name,name) == 0 )
+				continue;
+			}
+			p = list;
+			for( p = list+1; p->n_un.n_name != NULL; p++)
+			{
+				if( (p->n_un.n_name[0] == '_' && 
+					strcmp(name,p->n_un.n_name+1) == 0) || 
+					strcmp(p->n_un.n_name,name) == 0 )
 				{
+					printf("MATCH\n");
 					_elf_to_nlist_sym(p, syms_2, shdr, ehdr.e_shnum);
+					printf("%lx\n",p->n_value);
 					if(--entrynum <= 0)
+					{
+						printf("Breaking\n");
 						break;
+					}
 				}
 			}
 		}
 
 	}
+end:
+	if(strtab != NULL)
+		munmap(strtab, symstrsize);
+	if(shdr != NULL)
+		munmap(shdr, symsize);
+	return entrynum;
 }

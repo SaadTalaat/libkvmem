@@ -6,6 +6,8 @@
 #ifndef _KVMEM_H_
 #define _KVMEM_H_
 
+#include <a.out.h>
+ 
 #define DT_SONAME "libkvmem"
 typedef struct _kvmem
 {
@@ -14,7 +16,9 @@ typedef struct _kvmem
 	int nlfd;	/* linux binary file descriptor /vmlinuz */
 
 } kvmem_t;
+
 kvmem_t *kvmem_openfiles(const char * kern_binary, const char *mem_dev, unsigned int access, unsigned int verbose);
+int kvmem_nlist(kvmem_t *kd, struct nlist *l);
 unsigned int kvmem_close(kvmem_t *kd);
 
 #endif /* _KVMEM_H_ */

@@ -28,7 +28,7 @@ _kvmem_open(kvmem_t *kd, const char* kern_binary, const char* mem_dev, unsigned 
 	struct stat st;
 
 	if( kern_binary == NULL)
-		kern_binary = "/vmlinuz";
+		kern_binary = "/home/nash/vmlinux";
 	else if ( strlen(kern_binary) >= PATH_MAX)
 		return NULL;
 
@@ -42,29 +42,29 @@ _kvmem_open(kvmem_t *kd, const char* kern_binary, const char* mem_dev, unsigned 
 	
 	if(( kd->pmfd = open(mem_dev,access, 0)) < 0)
 	{
-		fprintf(stderr,"[error]: This file must have root privilege.\n");
+		fprintf(stderr,"[error]: This file must have root privilege. %s\n",mem_dev);
 		return NULL;
 	}
 
-	if( fstat(kd->pmfd,&st) < 0)
-	{
-		return NULL;
-	}
+//	if( fstat(kd->pmfd,&st) < 0)
+//	{
+//		return NULL;
+//	}
 	if(S_ISREG(st.st_mode) && st.st_size <= 0)
 	{
 		return NULL;	
 	}
 
-	if(fnctl(kd->pmfd, F_SETFD, FD_CLOEXEC) < 0){
+	if(fcntl(kd->pmfd, F_SETFD, FD_CLOEXEC) < 0){
 		return NULL;
 	}
 	
 	if( (kd->nlfd = open(kern_binary, O_RDONLY, 0))	< 0)
 	{
-		fprintf(stderr,"[error]: This file must have root privilege.\n");
+		fprintf(stderr,"[error]: This file must have root privilege. %s\n", kern_binary);
 		return NULL;
 	}
-	if(fnctl(kd->nlfd, F_SETFD, FD_CLOEXEC) < 0){
+	if(fcntl(kd->nlfd, F_SETFD, FD_CLOEXEC) < 0){
 		return NULL;
 	}
 	// finally return kd!
@@ -156,7 +156,7 @@ kvmem_fndlist_prefix(kvmem_t *kd, struct nlist *nl, int missing, const char *pre
 }
 
 int
-_kvmem_nllist(kvmem_t *kd, struct nlist *nl, int init)
+_kvmem_nlist(kvmem_t *kd, struct nlist *nl, int init)
 {
 	struct nlist *p;
 	int invalid, error;
@@ -170,8 +170,11 @@ _kvmem_nllist(kvmem_t *kd, struct nlist *nl, int init)
 			return error;
 		
 	}
+	error = _elf_fdnlist(kd->nlfd, nl);
+	printf("%d Err\n",error);
 	for(p= nl; p->n_un.n_name && p->n_un.n_name[0]; ++p)
 	{
+		printf("looping..\n");
 		if(p->n_type != N_UNDF)
 			continue;
 		error = snprintf(symname, sizeof(symname), "%s%s", prefix, (prefix[0] != '\0' && p->n_un.n_name[0] == '_')? (p->n_un.n_name +1 ): p->n_un.n_name);
@@ -180,7 +183,11 @@ _kvmem_nllist(kvmem_t *kd, struct nlist *nl, int init)
 		// Meh, probably will right elf parser first..
 		p->n_un.n_name = symname;
 	}
+	return p - nl;
+}
 
-
-
+int 
+kvmem_nlist(kvmem_t *kd, struct nlist *nl)
+{
+	return _kvmem_nlist(kd,nl,0);
 }
