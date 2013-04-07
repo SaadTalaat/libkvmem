@@ -151,7 +151,7 @@ kvmem_fndlist_prefix(kvmem_t *kd, struct nlist *nl, int missing, const char *pre
 	}
 	np = n;
 	// TODO: Implement missing symbols additions and elf symbols enumration.
-	unresolved = __fdnlist(kd->nlfd, np);
+	unresolved = _elf_fdnlist(kd->nlfd, np);
 	return unresolved;
 }
 
@@ -165,7 +165,7 @@ _kvmem_nllist(kvmem_t *kd, struct nlist *nl, int init)
 	if(!(kd->pmfd >= 0) )
 	{
 		// to be implemented
-		error = __fdnlist(kd->nlfd, nl);
+		error = _elf_fdnlist(kd->nlfd, nl);
 		if(error <= 0)
 			return error;
 		

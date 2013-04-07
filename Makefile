@@ -12,16 +12,16 @@ LINKER = ld
 .PHONY: install all
 
 $(KVMEM_LIB):$(KVMEM_OBJFILES)
-	@echo [KVMEM] Linking
-	$(LINKER) $(LINKER_OPTIONS) $(KVMEM_OBJFILES) -o $@
+	@echo [KVMEM] Linking \\t$(KVMEM_OBJFILES)
+	@$(LINKER) $(LINKER_OPTIONS) $(KVMEM_OBJFILES) -o $@
 
 $(KVMEM_OBJDIR):
 	@echo [KVMEM] Initiating
 	@mkdir bin
 
 $(KVMEM_OBJDIR)/%.o:$(KVMEM_SRCDIR)/%.c $(KVMEM_OBJDIR)
-	@echo [KVMEM] Compiling
-	$(CC) $(CC_OPTIONS) -c -o $@ $<
+	@echo [KVMEM] Compiling \\t$<
+	@$(CC) $(CC_OPTIONS) -c -o $@ $<
 	
 clean:
 	@echo [KVMEM] cleaning
