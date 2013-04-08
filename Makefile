@@ -1,21 +1,31 @@
+
 INCDIR = include
+
+#Command options
 CC_OPTIONS = -I $(INCDIR) -fPIC -g
 CC_TEST_OPTIONS= -I $(INCDIR)
-
 LINKER_OPTIONS = -shared -soname libkvmem.so.1 -export-dynamic
+
+#Lists of files
 KVMEM_CFILES = $(wildcard src/*.c)
 KVMEM_OBJFILES = $(foreach obj,$(KVMEM_CFILES),$(obj:src/%.c=bin/%.o))
 KVMEM_TESTFILES = $(wildcard tests/*.c)
 KVMEM_TOBJFILES = $(foreach obj,$(KVMEM_TESTFILES),$(obj:tests/%.c=bin/tests/%))
 
+#paths
 KVMEM_SRCDIR = src
 KVMEM_OBJDIR = bin
 KVMEM_TESTDIR = tests
 
 KVMEM_LIB = $(KVMEM_OBJDIR)/libkvmem.so.1
 
+#compiling
 CC = gcc
 LINKER = ld
+
+
+# Functions
+execute = sudo $(1)
 
 .PHONY: install all clean tests
 
@@ -32,7 +42,10 @@ $(KVMEM_OBJDIR)/%.o:$(KVMEM_SRCDIR)/%.c $(KVMEM_OBJDIR)
 	@$(CC) $(CC_OPTIONS) -c -o $@ $<
 	
 tests:$(KVMEM_TOBJFILES)
-	@sudo $<
+	$(foreach test,$(KVMEM_TOBJFILES),$(call execute, $(test)))
+	@$(execute)
+	@echo '\n'
+
 $(KVMEM_OBJDIR)/$(KVMEM_TESTDIR)/%:$(KVMEM_TESTDIR)/%.c
 	@echo [KVMEM] Building Tests
 	@$(CC) $< $(KVMEM_LIB) $(CC_TEST_OPTIONS) -o $@
