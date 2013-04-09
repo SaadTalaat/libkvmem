@@ -16,55 +16,89 @@
 #include "kvmem_private.h"
 
 
-
 /**
  * description: a kvmem_openfiles helper
  *
  */
+char *
+kvmem_err(kvmem_t *kd, const char* error)
+{
+	int len;
+	char *err = "[Error]: kvmem_err: Internal error.\n";
+	if(kd == NULL)
+		return NULL;
+	if(error == NULL)
+		return kd->ebuf;
+	if(kd->ebuf == NULL)
+	{
+		len = strlen(error);
+		if( (kd->ebuf = (char *) malloc(len+2)) == NULL)
+			return err;
+		memcpy(kd->ebuf,error, len);
+		kd->ebuf[len]='\n';
+		kd->ebuf[len+1] = '\0';
+	}
+	else
+	{
+		free(kd->ebuf);
+		len = strlen(error);
+		if( (kd->ebuf = (char *) malloc(len+2)) == NULL)
+			return err;
+		memcpy(kd->ebuf, error, len);
+		kd->ebuf[len] = '\n';
+		kd->ebuf[len+1] = '\0';
+	}
+
+};
+
+
 kvmem_t*
 _kvmem_open(kvmem_t *kd, const char* kern_binary, const char* mem_dev, unsigned int access, unsigned int verbose)
 {
 
 	struct stat st;
-
-	if( kern_binary == NULL)
-		kern_binary = "/home/nash/vmlinux";
-	else if ( strlen(kern_binary) >= PATH_MAX)
+	if(kd == NULL)
 		return NULL;
+	if( kern_binary == NULL)
+		kern_binary = "/home/saad/vmlinux";
+	else if ( strlen(kern_binary) >= PATH_MAX)
+	{
+		kvmem_err(kd, "[Error]: kernel binary path is too big");
+		return NULL;
+	}
 
 	if( access & ~O_RDWR)
+	{
+		kvmem_err(kd, "[Error]: access flags.");
 		return NULL;
-
+	}
 	if( mem_dev == NULL)
 		mem_dev = "/dev/mem";
 	else if ( strlen(mem_dev) >= PATH_MAX)
-		return NULL;
-	
-	if(( kd->pmfd = open(mem_dev,access, 0)) < 0)
 	{
-		fprintf(stderr,"[error]: This file must have root privilege. %s\n",mem_dev);
+		kvmem_err(kd, "[Error]: /dev/mem path too big");
 		return NULL;
 	}
 
-//	if( fstat(kd->pmfd,&st) < 0)
-//	{
-//		return NULL;
-//	}
-	if(S_ISREG(st.st_mode) && st.st_size <= 0)
+	if(( kd->pmfd = open(mem_dev,access, 0)) < 0)
 	{
-		return NULL;	
+		kvmem_err(kd, "[Error]: superuser privilege required");
+		return NULL;
 	}
 
 	if(fcntl(kd->pmfd, F_SETFD, FD_CLOEXEC) < 0){
+		kvmem_err(kd,"[Error]: could not control file");
 		return NULL;
 	}
 	
 	if( (kd->nlfd = open(kern_binary, O_RDONLY, 0))	< 0)
 	{
-		fprintf(stderr,"[error]: This file must have root privilege. %s\n", kern_binary);
+		kvmem_err(kd, "[Error]: superuser privilege required");
 		return NULL;
 	}
-	if(fcntl(kd->nlfd, F_SETFD, FD_CLOEXEC) < 0){
+	if(fcntl(kd->nlfd, F_SETFD, FD_CLOEXEC) < 0)
+	{
+		kvmem_err(kd,"[Error]: could not control file");
 		return NULL;
 	}
 	// finally return kd!
@@ -81,12 +115,14 @@ kvmem_t*
 kvmem_openfiles(const char* kern_binary, const char* mem_dev, unsigned int access, unsigned int verbose)
 {
 	kvmem_t *kd;
+
 	if( (kd = (kvmem_t *) malloc(sizeof(kvmem_t))) == NULL)
 	{
 		if(verbose != 0)
-			fprintf(stderr,"[error]: cannot allocate memory.\n");
+			kvmem_err(kd,"[Error]: cannot allocate memory.");
 		return NULL;
 	}
+	kd->ebuf = malloc(1024);	
 	return _kvmem_open(kd, kern_binary, mem_dev, access, 0);
 }
 
@@ -130,7 +166,10 @@ kvmem_fndlist_prefix(kvmem_t *kd, struct nlist *nl, int missing, const char *pre
 	n = np = malloc(len);
 	memset(n,0,len);
 	if(n == NULL)
+	{
+		kvmem_err(kd,"[Error]: could not allocate memory");
 		return 0;
+	}
 	cp = ce = (char *) np;
 	cp += unresolved * sizeof(struct nlist);
 	ce += len;
@@ -150,7 +189,6 @@ kvmem_fndlist_prefix(kvmem_t *kd, struct nlist *nl, int missing, const char *pre
 		unresolved ++;
 	}
 	np = n;
-	// TODO: Implement missing symbols additions and elf symbols enumration.
 	unresolved = _elf_fdnlist(kd->nlfd, np);
 	return unresolved;
 }
@@ -162,6 +200,11 @@ _kvmem_nlist(kvmem_t *kd, struct nlist *nl, int init)
 	int invalid, error;
 	char symname[1024];
 	const char *prefix = "";
+	if(kd == NULL || nl == NULL)
+	{
+		kvmem_err(kd,"[Error]: invalid arguments");
+		return -1;
+	}
 	if(!(kd->pmfd >= 0) )
 	{
 		// to be implemented
@@ -171,10 +214,8 @@ _kvmem_nlist(kvmem_t *kd, struct nlist *nl, int init)
 		
 	}
 	error = _elf_fdnlist(kd->nlfd, nl);
-	printf("%d Err\n",error);
 	for(p= nl; p->n_un.n_name && p->n_un.n_name[0]; ++p)
 	{
-		printf("looping..\n");
 		if(p->n_type != N_UNDF)
 			continue;
 		error = snprintf(symname, sizeof(symname), "%s%s", prefix, (prefix[0] != '\0' && p->n_un.n_name[0] == '_')? (p->n_un.n_name +1 ): p->n_un.n_name);

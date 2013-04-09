@@ -118,8 +118,6 @@ _elf_fdnlist(int fd, struct nlist* list)
 	struct stat st;
 	off_t page_size;
 	page_size = sysconf(_SC_PAGE_SIZE);
-	printf("PAGE SIZE %lx\n",page_size);
-	printf("Starting.. %s\n",list[1].n_un.n_name);
 	if(fd <= 0 )
 		return -1;
 	if(lseek(fd, (off_t) 0, SEEK_SET) == -1 || read(fd, &ehdr, sizeof(ehdr)) != sizeof(ehdr) || !_check_elf(&ehdr) )//|| fstat(fd, &st) < 0)
@@ -131,7 +129,6 @@ _elf_fdnlist(int fd, struct nlist* list)
 	base += ehdr.e_shoff - (ehdr.e_shoff  & ~(page_size -1));
 	if(base == MAP_FAILED)
 	{
-		printf("[Error]: Could not map file.\n");
 		goto end;
 	}
 	
@@ -159,13 +156,11 @@ _elf_fdnlist(int fd, struct nlist* list)
 	base = mmap(NULL, (size_t) symstrsize+diff, PROT_READ, MAP_PRIVATE, fd,(off_t) (symstroff & ~(page_size -1)));
 	if(base == MAP_FAILED)
 	{
-		printf("Could not map Size: %x, Offset %lx\n", symstrsize, (symstroff & ~(page_size -1)));
 		if(shdr != NULL)
 			munmap(shdr, shdr_size);
 		goto end;
 	}
 	base+=diff;
-	printf("%p====\n",base);
 	strtab = (char*) base;
 
 	for(p = list; (p->n_un.n_name == NULL || p->n_un.n_name[0] == '\0'); ++p)
@@ -175,12 +170,9 @@ _elf_fdnlist(int fd, struct nlist* list)
 		p->n_desc = 0;
 		p->n_value = 0;
 		entrynum++;
-		printf("Entry %d\n",entrynum);
 	}
-	printf("Seeking size %lx\n",symstroff);
 	if(lseek(fd, (off_t) symoff, SEEK_SET) == -1)
 	{
-		printf("Fail\n");
 		entrynum = -1;
 		goto end;
 	}
@@ -191,7 +183,6 @@ _elf_fdnlist(int fd, struct nlist* list)
 
 		if(read(fd,syms,j) != j)
 		{
-			printf("Didn't read\n");
 			break;
 		}
 
@@ -212,12 +203,9 @@ _elf_fdnlist(int fd, struct nlist* list)
 					strcmp(name,p->n_un.n_name+1) == 0) || 
 					strcmp(p->n_un.n_name,name) == 0 )
 				{
-					printf("MATCH\n");
 					_elf_to_nlist_sym(p, syms_2, shdr, ehdr.e_shnum);
-					printf("%lx\n",p->n_value);
 					if(--entrynum <= 0)
 					{
-						printf("Breaking\n");
 						break;
 					}
 				}
