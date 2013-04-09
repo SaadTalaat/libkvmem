@@ -1,0 +1,5 @@
+TODO:
+=====
+
+1- If kernel binary does not exist, provide a method to extract symbols from system map. the dump method..
+2- If /dev/mem is configured to strict, provide a kernel module to port physical memory, probably the old kmem..
