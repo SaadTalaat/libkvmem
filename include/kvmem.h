@@ -15,6 +15,8 @@ typedef struct _kvmem
 	int pmfd;	/* physical memory file descriptor /dev/mem */
 	int nlfd;	/* linux binary file descriptor /vmlinuz */
 	char *ebuf;
+
+	unsigned char syms;
 } kvmem_t;
 
 kvmem_t *kvmem_openfiles(const char * kern_binary, const char *mem_dev, unsigned int access, unsigned int verbose);

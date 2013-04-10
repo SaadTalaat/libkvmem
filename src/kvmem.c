@@ -12,13 +12,146 @@
 #include <unistd.h>
 #include <string.h>
 #include <a.out.h>
+#include <limits.h>
+#include <sys/mman.h>
 
 #include "kvmem_private.h"
 
 
+unsigned int *line_sizes;
+unsigned int line_sizes_init = 0;
 /**
- * description: a kvmem_openfiles helper
- *
+ * In case vmlinux ELF image is not available
+ * then find symbols using the non efficient
+ * dump and exhausting method, kallsyms..
+ */
+ int
+ _sym_kallsyms(int fd, struct nlist *list)
+ {
+
+ 	char *base,*endptr;
+ 	struct stat st;
+ 	unsigned int i,j;
+  	int x = 0,entrynum = 0,y,z = 0;
+ 	struct nlist *p;
+ 	if(fd <= 0)
+ 		return -1;
+
+ 	// Thank you compiler optimization..
+ 	if( line_sizes == NULL && (line_sizes = (unsigned int *) malloc(KSYMS_LC*sizeof(unsigned int)) ) == NULL)
+ 	{	
+ 		return -1;
+ 	}
+ 	// did we set line_sizes before?
+ 	if(line_sizes_init == 0)
+ 	{
+ 		/**
+ 		 * Set flag to 1,
+ 		 * we don't want to do this long process again, do we?
+ 		 */
+ 		line_sizes_init = 1;
+
+ 		// This is what I call a suicide..
+	 	base = (char *) malloc(5000000);
+	 	// This is what I call, killing a dead body!
+ 		memset(base,0,5000000);
+
+		while(1)
+		{
+			// Too bad we can't mmap procfs, so we just read it!
+			y  = read(fd,base+z,5*0x400*0x400);
+			z+=y;
+			lseek(fd,z,SEEK_SET);
+			if(y == 0)
+				break;
+		}
+
+		for(i = 0,j=0; i <= z; i++)
+ 		{
+ 			if(base[i] == '\n')
+ 			{
+ 				line_sizes[j] = i+1;
+ 				j++;
+ 				continue;
+ 			}
+ 		}
+ 	}
+ 	// Give the MMU his millions back
+ 	free(base);
+ 	lseek(fd,0,SEEK_SET);
+ 
+ 	
+
+
+	for(p = list; (p->n_un.n_name == NULL || p->n_un.n_name[0] == '\0'); ++p)
+	{
+		p->n_type = 0;
+		p->n_other = 0;
+		p->n_desc = 0;
+		p->n_value = 0;
+		entrynum++;
+	}
+ 	/**
+ 	 * Due to the fact that kallsyms are ordered by
+ 	 * address, strings are randomized, therefore
+ 	 * there's no efficient searching algorithm..
+ 	 * So We use the blind search algorithm... Problem?
+ 	 */
+
+ 	for(p = list+1; p->n_un.n_name != NULL; p++)
+ 	{
+ 		// single KB is good enough, too big though..
+		base = (char *) malloc(1024);
+		for(i = 1;i <= j-1; i++)
+ 		{
+			if(base == NULL)
+			{
+				return -1;
+			}
+ 			char *name;
+
+ 			// May the lord of IO forgive us, doing so much reads!
+ 			x = read(fd,base,line_sizes[i]-line_sizes[i-1]);
+ 			lseek(fd,line_sizes[i],SEEK_SET);
+
+#ifdef KVMEM_32
+	 		// with 32bit addresses, 11 char before string..
+	 		name = base+11;
+	 		name[x-12] = 0;
+#else
+	 		name = base+19;
+	 		name[x-20] = 0;
+#endif
+	 		// Do we have a match?
+			if( (p->n_un.n_name[0] == '_' && 
+					strcmp(name,p->n_un.n_name+1) == 0) || 
+					strcmp(p->n_un.n_name,name) == 0 )
+			{
+				// YES!
+#ifdef KVMEM_32
+				p->n_value = strtoul(name-11,&endptr,16);
+#else
+				p->n_value = strtoul(name-19,&endptr,16);
+#endif
+				//process next one
+				if(--entrynum <= 0)
+					goto done;
+
+				break;
+			}
+			// We don't want any leftovers..
+			memset(base,0,x);
+		}
+  	}
+
+done:
+  	return entrynum;
+ }
+
+/**
+ * sets error buffer to passed error, or
+ * retrives last error if error is set to 
+ * NULL.
  */
 char *
 kvmem_err(kvmem_t *kd, const char* error)
@@ -52,6 +185,10 @@ kvmem_err(kvmem_t *kd, const char* error)
 };
 
 
+/**
+ * private open function which opens
+ * symbols source and memory port
+ */
 kvmem_t*
 _kvmem_open(kvmem_t *kd, const char* kern_binary, const char* mem_dev, unsigned int access, unsigned int verbose)
 {
@@ -60,7 +197,10 @@ _kvmem_open(kvmem_t *kd, const char* kern_binary, const char* mem_dev, unsigned 
 	if(kd == NULL)
 		return NULL;
 	if( kern_binary == NULL)
-		kern_binary = "/home/saad/vmlinux";
+	{
+		kern_binary = "/proc/kallsyms";
+		kd->syms = 1;
+	}
 	else if ( strlen(kern_binary) >= PATH_MAX)
 	{
 		kvmem_err(kd, "[Error]: kernel binary path is too big");
@@ -213,7 +353,12 @@ _kvmem_nlist(kvmem_t *kd, struct nlist *nl, int init)
 			return error;
 		
 	}
-	error = _elf_fdnlist(kd->nlfd, nl);
+	if(kd->syms == 0)
+		error = _elf_fdnlist(kd->nlfd, nl);
+	else
+	{
+		error = _sym_kallsyms(kd->nlfd, nl);
+	}
 	for(p= nl; p->n_un.n_name && p->n_un.n_name[0]; ++p)
 	{
 		if(p->n_type != N_UNDF)
