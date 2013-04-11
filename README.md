@@ -16,12 +16,19 @@ Providing access to kernel memory from kernel /dev/mem port and providing a meth
 * Building
     - `$ git clone https://github.com/SaadTalaat/Libkvmem.git`
     Download source package
+    - `$ aclocal`
+    Build local macros from configure.ac
+    - `$ autoconf`
+    Generate configuration files
+    - `$ automake -a`
+    Generate Makefile.in
+    - `$ ./configure`
+    execute the configure script
     - `$ make`
-    Build library in directory bin under libkvmem.so.1
+    Build library
     - `# make install`
     Moves library into system default library path for execution
-    - `$ make tests`
-    Compiles and runs tests.
+
 
 ---
 
